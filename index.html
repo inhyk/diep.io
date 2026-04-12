@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>diep.io 프로토타입</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <canvas id="game" aria-label="탑다운 탱크 아레나 프로토타입"></canvas>
+
+      <div class="compact-hud" id="compact-hud">
+        <div class="compact-hud__top">
+          <strong class="compact-hud__level" id="compact-level">레벨 1</strong>
+          <span class="compact-hud__points" id="compact-points">0 포인트</span>
+        </div>
+
+        <div class="compact-hud__row">
+          <span>체력</span>
+          <strong id="compact-hp-text">0 / 0</strong>
+        </div>
+        <div class="compact-meter">
+          <div class="compact-meter__fill compact-meter__fill--hp" id="compact-hp-fill"></div>
+        </div>
+
+        <div class="compact-hud__row">
+          <span>경험치</span>
+          <strong id="compact-xp-text">0 / 0</strong>
+        </div>
+        <div class="compact-meter">
+          <div class="compact-meter__fill compact-meter__fill--xp" id="compact-xp-fill"></div>
+        </div>
+
+        <div class="compact-hud__meta">
+          <span id="compact-class-name">기본 전차</span>
+          <span id="compact-class-status">레벨 8에서 전차 분기 해금</span>
+        </div>
+
+        <div class="compact-class-choices" id="compact-class-choices"></div>
+      </div>
+
+      <aside class="leaderboard" id="leaderboard" aria-label="리더보드">
+        <div class="leaderboard__top">
+          <strong>리더보드</strong>
+          <span id="leaderboard-status">상위 7</span>
+        </div>
+        <div class="leaderboard__list" id="leaderboard-list"></div>
+      </aside>
+
+      <aside class="chat-panel" id="chat-panel" aria-label="채팅">
+        <div class="chat-panel__top">
+          <strong>채팅</strong>
+          <span id="chat-status">엔터로 채팅</span>
+        </div>
+        <div class="music-box" id="music-panel">
+          <div class="music-box__top">
+            <strong>배경음악</strong>
+            <span id="music-status">파일 없음</span>
+          </div>
+          <div class="music-box__track" id="music-track">
+            직접 가진 오디오 파일을 불러오세요
+          </div>
+          <input id="music-file" type="file" accept="audio/*" />
+          <div class="music-box__controls">
+            <button id="music-toggle" type="button" disabled>재생</button>
+            <label class="music-box__volume" for="music-volume">
+              <span>볼륨</span>
+              <input id="music-volume" type="range" min="0" max="100" value="55" />
+            </label>
+          </div>
+        </div>
+        <div class="chat-log" id="chat-log"></div>
+        <form class="chat-form" id="chat-form">
+          <input
+            id="chat-input"
+            type="text"
+            maxlength="90"
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="게임 시작 후 채팅 가능"
+          />
+          <button type="submit">보내기</button>
+        </form>
+      </aside>
+
+      <button class="creator-toggle" id="creator-toggle" type="button">
+        제작자
+      </button>
+
+      <aside class="creator-panel is-hidden" id="creator-panel" aria-label="제작자 모드">
+        <div class="creator-panel__top">
+          <strong>제작자 모드</strong>
+          <span id="creator-badge">잠김</span>
+        </div>
+        <p class="creator-panel__text" id="creator-message">
+          비밀번호를 입력해 개발자 기능을 잠금 해제하세요.
+        </p>
+
+        <div class="creator-auth" id="creator-auth">
+          <label class="creator-auth__field" for="creator-password">
+            <span>비밀번호</span>
+            <input
+              id="creator-password"
+              type="password"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="비밀번호"
+            />
+          </label>
+          <button class="creator-auth__button" id="creator-unlock" type="button">
+            잠금 해제
+          </button>
+        </div>
+
+        <div class="creator-controls" id="creator-controls" hidden>
+          <div class="creator-controls__group">
+            <button class="creator-chip" data-creator-toggle="invulnerable" type="button">
+              무적
+            </button>
+            <button class="creator-chip" data-creator-toggle="infinitePoints" type="button">
+              무한 포인트
+            </button>
+          </div>
+
+          <div class="creator-controls__grid">
+            <button class="creator-action" data-creator-action="heal" type="button">전체 회복</button>
+            <button class="creator-action" data-creator-action="levels" type="button">+5 레벨</button>
+            <button class="creator-action" data-creator-action="points" type="button">+10 포인트</button>
+            <button class="creator-action" data-creator-action="spawnEnemy" type="button">로그 소환</button>
+            <button class="creator-action" data-creator-action="spawnAlpha" type="button">알파 소환</button>
+            <button class="creator-action" data-creator-action="clearEnemies" type="button">로그 제거</button>
+          </div>
+        </div>
+      </aside>
+
+      <div class="hud">
+        <section class="panel panel--brand">
+          <p class="eyebrow">탱크 아레나 프로토타입</p>
+          <h1>diep.io</h1>
+          <p class="subtitle">
+            WASD 또는 방향키로 이동하고, 마우스로 조준하고, 클릭 유지 또는
+            스페이스로 발사하고, 1-6으로 업그레이드하고, 7-9로 전차 분기를
+            선택합니다.
+          </p>
+        </section>
+
+        <section class="panel panel--stats">
+          <div class="panel__heading">
+            <h2>상태</h2>
+            <span id="points-label">0 포인트</span>
+          </div>
+
+          <div class="stat-row">
+            <span>체력</span>
+            <strong id="hp-text">0 / 0</strong>
+          </div>
+          <div class="meter">
+            <div class="meter__fill meter__fill--hp" id="hp-fill"></div>
+          </div>
+
+          <div class="stat-row">
+            <span>경험치</span>
+            <strong id="xp-text">0 / 0</strong>
+          </div>
+          <div class="meter">
+            <div class="meter__fill meter__fill--xp" id="xp-fill"></div>
+          </div>
+
+          <p class="meta" id="stats-meta">레벨 1</p>
+        </section>
+
+        <section class="panel panel--classes">
+          <div class="panel__heading">
+            <h2>전차 분기</h2>
+            <span id="class-tier-label">티어 0</span>
+          </div>
+          <div class="class-current">
+            <span>현재</span>
+            <strong id="class-name">기본 전차</strong>
+          </div>
+          <p class="meta" id="class-description">균형 잡힌 시작 전차입니다.</p>
+          <p class="meta class-status" id="class-status">
+            첫 분기는 레벨 8에서 해금됩니다.
+          </p>
+          <div class="class-list" id="class-list"></div>
+        </section>
+
+        <section class="panel panel--upgrades">
+          <div class="panel__heading">
+            <h2>업그레이드</h2>
+            <span>클릭 또는 단축키</span>
+          </div>
+          <div class="upgrade-list" id="upgrade-list"></div>
+        </section>
+
+        <section class="panel panel--feed">
+          <div class="panel__heading">
+            <h2>로그</h2>
+            <span>실시간 전투 로그</span>
+          </div>
+          <div class="feed-list" id="event-feed"></div>
+        </section>
+      </div>
+
+      <div class="overlay" id="overlay">
+        <div class="overlay__card">
+          <p class="eyebrow">탑다운 슈터 프로토타입</p>
+          <h2 id="overlay-title">게임 시작</h2>
+          <p id="overlay-text">
+            도형을 파밍하고 로그 탱크를 쓰러뜨리며 레벨을 올리세요. 더 높은
+            티어에 도달하면 새로운 전차 클래스로 분기할 수 있습니다.
+          </p>
+          <div class="mode-selector">
+            <span class="mode-selector__label">게임 모드</span>
+            <div class="mode-selector__list" id="mode-selector">
+              <button class="mode-chip is-active" data-game-mode="ffa" type="button">자유전</button>
+              <button class="mode-chip" data-game-mode="territory" type="button">땅따먹기</button>
+              <button class="mode-chip" data-game-mode="team" type="button">팀전</button>
+              <button class="mode-chip" data-game-mode="soccer" type="button">축구</button>
+            </div>
+          </div>
+          <label class="overlay__field" for="nickname-input">
+            <span>닉네임</span>
+            <input
+              id="nickname-input"
+              type="text"
+              maxlength="16"
+              autocomplete="nickname"
+              spellcheck="false"
+              placeholder="전차 이름 입력"
+            />
+          </label>
+          <button id="start-button" type="button">게임 시작</button>
+        </div>
+      </div>
+
+      <div class="touch-stick" id="move-stick" hidden>
+        <div class="touch-stick__nub"></div>
+      </div>
+      <div class="touch-stick touch-stick--aim" id="aim-stick" hidden>
+        <div class="touch-stick__nub"></div>
+      </div>
+    </div>
+
+    <script src="./game.js"></script>
+  </body>
+</html>
