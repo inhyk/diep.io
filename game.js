@@ -24,6 +24,9 @@ const dom = {
   musicFile: document.getElementById("music-file"),
   musicToggle: document.getElementById("music-toggle"),
   musicVolume: document.getElementById("music-volume"),
+  mapSelector: document.getElementById("map-selector"),
+  mapCount: document.getElementById("map-count"),
+  mapSummary: document.getElementById("map-summary"),
   modeButtons: [...document.querySelectorAll("[data-game-mode]")],
   compactHud: document.getElementById("compact-hud"),
   compactLevel: document.getElementById("compact-level"),
@@ -64,6 +67,7 @@ const BONUS_POINT_INTERVAL = 5;
 const SHOW_MINIMAP = true;
 const LEADERBOARD_LIMIT = 8;
 const NICKNAME_STORAGE_KEY = "diep.io.nickname";
+const MAP_STORAGE_KEY = "diep.io.map";
 const MUSIC_VOLUME_STORAGE_KEY = "diep.io.musicVolume";
 const CREATOR_PASSWORD = "hihi";
 const TERRITORY_CELL_SIZE = 200;
@@ -271,6 +275,521 @@ const TEAM_DEFS = {
     tint: "rgba(255, 110, 137, 0.18)",
   },
 };
+
+function createMapPalette(overrides = {}) {
+  return {
+    skyTop: "#153149",
+    skyBottom: "#08131f",
+    glowA: "rgba(76, 180, 255, 0.2)",
+    glowB: "rgba(255, 110, 137, 0.12)",
+    grid: "rgba(255, 255, 255, 0.05)",
+    border: "rgba(189, 227, 255, 0.2)",
+    minimapGlow: "rgba(76, 180, 255, 0.12)",
+    ...overrides,
+  };
+}
+
+function normalizedRect(x, y, width, height, fill, stroke = "", lineWidth = 0, radius = 0) {
+  return { shape: "rect", normalized: true, x, y, width, height, fill, stroke, lineWidth, radius };
+}
+
+function normalizedCircle(x, y, radius, fill, stroke = "", lineWidth = 0) {
+  return { shape: "circle", normalized: true, x, y, radius, fill, stroke, lineWidth };
+}
+
+function normalizedRing(x, y, outerRadius, innerRadius, fill, stroke = "", lineWidth = 0) {
+  return {
+    shape: "ring",
+    normalized: true,
+    x,
+    y,
+    outerRadius,
+    innerRadius,
+    fill,
+    stroke,
+    lineWidth,
+  };
+}
+
+function normalizedDiamond(x, y, width, height, fill, stroke = "", lineWidth = 0) {
+  return { shape: "diamond", normalized: true, x, y, width, height, fill, stroke, lineWidth };
+}
+
+function createMapDef(config) {
+  return {
+    id: "classic",
+    label: "클래식",
+    tag: "표준",
+    description: "기본 전장입니다.",
+    gridSize: GRID_SIZE,
+    shapeScale: 1,
+    shapeBias: {},
+    botScale: 1,
+    spawnPreset: "sides",
+    territoryPattern: "sides",
+    teamLayout: "sideLanes",
+    soccerLayout: "classic",
+    zones: [],
+    ...config,
+    palette: createMapPalette(config.palette),
+  };
+}
+
+const MAP_DEFS = {
+  classic: createMapDef({
+    id: "classic",
+    label: "클래식",
+    tag: "표준 · 좌우 대칭",
+    description: "가장 균형 잡힌 기본 전장입니다.",
+    zones: [
+      normalizedRect(0.08, 0.16, 0.14, 0.68, "rgba(97, 192, 255, 0.06)"),
+      normalizedRect(0.78, 0.16, 0.14, 0.68, "rgba(255, 110, 137, 0.06)"),
+      normalizedCircle(0.5, 0.5, 0.09, "rgba(255, 255, 255, 0.025)"),
+    ],
+  }),
+  mirror: createMapDef({
+    id: "mirror",
+    label: "미러",
+    tag: "중앙 복도 · 빠른 교전",
+    description: "중앙 길목이 얇아 전차전이 빨리 벌어지는 맵입니다.",
+    gridSize: 72,
+    shapeScale: 0.95,
+    shapeBias: { square: 1.25, triangle: 1.25, alphaPentagon: 0.65 },
+    botScale: 1.15,
+    spawnPreset: "corridor",
+    territoryPattern: "cross",
+    teamLayout: "corridor",
+    soccerLayout: "narrow",
+    palette: {
+      skyTop: "#11263d",
+      skyBottom: "#050d17",
+      glowA: "rgba(97, 192, 255, 0.18)",
+      glowB: "rgba(255, 255, 255, 0.06)",
+      minimapGlow: "rgba(146, 205, 255, 0.16)",
+    },
+    zones: [
+      normalizedRect(0.04, 0.2, 0.2, 0.6, "rgba(97, 192, 255, 0.07)"),
+      normalizedRect(0.76, 0.2, 0.2, 0.6, "rgba(255, 110, 137, 0.07)"),
+      normalizedRect(0.43, 0.08, 0.14, 0.84, "rgba(255, 255, 255, 0.03)"),
+    ],
+  }),
+  eclipse: createMapDef({
+    id: "eclipse",
+    label: "이클립스",
+    tag: "대각선 · 중심 교전",
+    description: "대각선으로 넓게 파고들며 중앙 원형에서 충돌하는 맵입니다.",
+    gridSize: 86,
+    shapeScale: 1.02,
+    shapeBias: { pentagon: 1.2, alphaPentagon: 1.15 },
+    spawnPreset: "diagonal",
+    territoryPattern: "diagonal",
+    teamLayout: "diagonal",
+    soccerLayout: "vertical",
+    palette: {
+      skyTop: "#1b2449",
+      skyBottom: "#07101d",
+      glowA: "rgba(124, 159, 255, 0.22)",
+      glowB: "rgba(255, 168, 105, 0.11)",
+      border: "rgba(204, 218, 255, 0.22)",
+      minimapGlow: "rgba(124, 159, 255, 0.16)",
+    },
+    zones: [
+      normalizedRing(0.5, 0.5, 0.17, 0.11, "rgba(255, 255, 255, 0.03)"),
+      normalizedDiamond(0.22, 0.22, 0.18, 0.18, "rgba(97, 192, 255, 0.06)"),
+      normalizedDiamond(0.78, 0.78, 0.18, 0.18, "rgba(255, 110, 137, 0.06)"),
+    ],
+  }),
+  forge: createMapDef({
+    id: "forge",
+    label: "포지",
+    tag: "고밀도 · 찌그러진 네모 많음",
+    description: "무거운 전선과 짧은 회전 구간이 반복되는 공장형 전장입니다.",
+    shapeScale: 1.16,
+    shapeBias: { squishedSquare: 1.7, triangle: 1.2, alphaPentagon: 0.8 },
+    spawnPreset: "pockets",
+    territoryPattern: "cross",
+    teamLayout: "pockets",
+    soccerLayout: "boxes",
+    palette: {
+      skyTop: "#3a2317",
+      skyBottom: "#0e0c11",
+      glowA: "rgba(255, 157, 90, 0.18)",
+      glowB: "rgba(255, 215, 90, 0.08)",
+      grid: "rgba(255, 232, 196, 0.045)",
+      border: "rgba(255, 190, 123, 0.22)",
+      minimapGlow: "rgba(255, 157, 90, 0.14)",
+    },
+    zones: [
+      normalizedRect(0.1, 0.12, 0.16, 0.76, "rgba(255, 157, 90, 0.08)"),
+      normalizedRect(0.74, 0.12, 0.16, 0.76, "rgba(255, 110, 137, 0.07)"),
+      normalizedDiamond(0.5, 0.5, 0.18, 0.24, "rgba(255, 215, 90, 0.05)"),
+    ],
+  }),
+  oasis: createMapDef({
+    id: "oasis",
+    label: "오아시스",
+    tag: "중앙 자원 · 육각형 많음",
+    description: "중앙 오아시스와 네 귀퉁이 자원대가 살아 있는 넓은 맵입니다.",
+    gridSize: 92,
+    shapeScale: 1.08,
+    shapeBias: { hexagon: 1.6, pentagon: 1.2, square: 0.8 },
+    spawnPreset: "corners",
+    territoryPattern: "corners",
+    teamLayout: "pockets",
+    soccerLayout: "wide",
+    palette: {
+      skyTop: "#1b3b46",
+      skyBottom: "#06121b",
+      glowA: "rgba(82, 222, 211, 0.18)",
+      glowB: "rgba(255, 217, 122, 0.1)",
+      minimapGlow: "rgba(82, 222, 211, 0.14)",
+    },
+    zones: [
+      normalizedCircle(0.5, 0.5, 0.13, "rgba(82, 222, 211, 0.08)"),
+      normalizedCircle(0.18, 0.2, 0.07, "rgba(255, 224, 140, 0.05)"),
+      normalizedCircle(0.82, 0.2, 0.07, "rgba(255, 224, 140, 0.05)"),
+      normalizedCircle(0.18, 0.8, 0.07, "rgba(255, 224, 140, 0.05)"),
+      normalizedCircle(0.82, 0.8, 0.07, "rgba(255, 224, 140, 0.05)"),
+    ],
+  }),
+  frostline: createMapDef({
+    id: "frostline",
+    label: "프로스트라인",
+    tag: "상하 대칭 · 긴 전선",
+    description: "상하로 길게 갈라진 빙결 전선 위에서 싸우는 맵입니다.",
+    gridSize: 96,
+    shapeScale: 0.94,
+    shapeBias: { pentagon: 1.15, alphaPentagon: 0.7 },
+    botScale: 1.08,
+    spawnPreset: "northSouth",
+    territoryPattern: "northSouth",
+    teamLayout: "topBottom",
+    soccerLayout: "vertical",
+    palette: {
+      skyTop: "#1a3048",
+      skyBottom: "#071119",
+      glowA: "rgba(153, 220, 255, 0.18)",
+      glowB: "rgba(190, 243, 255, 0.08)",
+      minimapGlow: "rgba(153, 220, 255, 0.14)",
+    },
+    zones: [
+      normalizedRect(0.12, 0.07, 0.76, 0.18, "rgba(153, 220, 255, 0.06)"),
+      normalizedRect(0.12, 0.75, 0.76, 0.18, "rgba(255, 255, 255, 0.03)"),
+      normalizedRect(0.42, 0.22, 0.16, 0.56, "rgba(255, 255, 255, 0.025)"),
+    ],
+  }),
+  rift: createMapDef({
+    id: "rift",
+    label: "리프트",
+    tag: "균열 라인 · 알파 집중",
+    description: "가운데 균열을 따라 고가치 도형이 몰리는 맵입니다.",
+    shapeScale: 1.03,
+    shapeBias: { alphaPentagon: 1.45, pentagon: 1.2, square: 0.78 },
+    botScale: 1.06,
+    spawnPreset: "diagonal",
+    territoryPattern: "checker",
+    teamLayout: "diagonal",
+    soccerLayout: "arena",
+    palette: {
+      skyTop: "#2b163d",
+      skyBottom: "#090914",
+      glowA: "rgba(200, 110, 255, 0.17)",
+      glowB: "rgba(255, 120, 184, 0.08)",
+      border: "rgba(221, 180, 255, 0.22)",
+      minimapGlow: "rgba(200, 110, 255, 0.14)",
+    },
+    zones: [
+      normalizedDiamond(0.5, 0.5, 0.18, 0.66, "rgba(200, 110, 255, 0.08)"),
+      normalizedCircle(0.22, 0.78, 0.08, "rgba(97, 192, 255, 0.05)"),
+      normalizedCircle(0.78, 0.22, 0.08, "rgba(255, 110, 137, 0.05)"),
+    ],
+  }),
+  halo: createMapDef({
+    id: "halo",
+    label: "헤일로",
+    tag: "원형 외곽 · 중앙 장악",
+    description: "바깥 링과 중앙 코어가 분리된 원형 전장입니다.",
+    gridSize: 88,
+    shapeScale: 1.04,
+    shapeBias: { hexagon: 1.3, pentagon: 1.18, triangle: 0.86 },
+    spawnPreset: "ring",
+    territoryPattern: "ring",
+    teamLayout: "ring",
+    soccerLayout: "arena",
+    palette: {
+      skyTop: "#16263a",
+      skyBottom: "#071018",
+      glowA: "rgba(122, 219, 255, 0.18)",
+      glowB: "rgba(255, 226, 142, 0.08)",
+      minimapGlow: "rgba(122, 219, 255, 0.14)",
+    },
+    zones: [
+      normalizedRing(0.5, 0.5, 0.28, 0.2, "rgba(122, 219, 255, 0.06)"),
+      normalizedCircle(0.5, 0.5, 0.08, "rgba(255, 255, 255, 0.03)"),
+    ],
+  }),
+  citadel: createMapDef({
+    id: "citadel",
+    label: "시타델",
+    tag: "요새형 · 거점 압박",
+    description: "두 요새와 중앙 광장이 선명하게 나뉜 전장입니다.",
+    shapeScale: 0.92,
+    shapeBias: { square: 0.86, hexagon: 1.2, alphaPentagon: 1.1 },
+    botScale: 1.2,
+    spawnPreset: "pockets",
+    territoryPattern: "quadrants",
+    teamLayout: "pockets",
+    soccerLayout: "boxes",
+    palette: {
+      skyTop: "#1e2830",
+      skyBottom: "#070c11",
+      glowA: "rgba(156, 200, 255, 0.12)",
+      glowB: "rgba(255, 170, 120, 0.08)",
+      minimapGlow: "rgba(156, 200, 255, 0.12)",
+    },
+    zones: [
+      normalizedRect(0.06, 0.18, 0.18, 0.64, "rgba(97, 192, 255, 0.08)"),
+      normalizedRect(0.76, 0.18, 0.18, 0.64, "rgba(255, 110, 137, 0.08)"),
+      normalizedRect(0.36, 0.34, 0.28, 0.32, "rgba(255, 255, 255, 0.03)"),
+    ],
+  }),
+  delta: createMapDef({
+    id: "delta",
+    label: "델타",
+    tag: "상하 분기 · 입체 진입",
+    description: "위아래 전선에서 중앙 삼각 수로로 파고드는 맵입니다.",
+    gridSize: 82,
+    shapeScale: 1.02,
+    shapeBias: { triangle: 1.4, square: 0.9, pentagon: 1.12 },
+    spawnPreset: "northSouth",
+    territoryPattern: "diagonal",
+    teamLayout: "topBottom",
+    soccerLayout: "vertical",
+    palette: {
+      skyTop: "#123342",
+      skyBottom: "#071017",
+      glowA: "rgba(90, 208, 255, 0.16)",
+      glowB: "rgba(255, 178, 118, 0.08)",
+    },
+    zones: [
+      normalizedDiamond(0.5, 0.26, 0.2, 0.14, "rgba(97, 192, 255, 0.06)"),
+      normalizedDiamond(0.5, 0.74, 0.2, 0.14, "rgba(255, 110, 137, 0.06)"),
+      normalizedDiamond(0.5, 0.5, 0.32, 0.22, "rgba(255, 255, 255, 0.03)"),
+    ],
+  }),
+  vault: createMapDef({
+    id: "vault",
+    label: "볼트",
+    tag: "좁은 통로 · 로그 많음",
+    description: "잠긴 중앙 통로에서 교전이 몰리는 빡빡한 맵입니다.",
+    gridSize: 74,
+    shapeScale: 0.88,
+    shapeBias: { square: 1.28, alphaPentagon: 0.55 },
+    botScale: 1.28,
+    spawnPreset: "corridor",
+    territoryPattern: "sides",
+    teamLayout: "corridor",
+    soccerLayout: "narrow",
+    palette: {
+      skyTop: "#232936",
+      skyBottom: "#080b12",
+      glowA: "rgba(169, 184, 255, 0.14)",
+      glowB: "rgba(255, 110, 137, 0.08)",
+      minimapGlow: "rgba(169, 184, 255, 0.12)",
+    },
+    zones: [
+      normalizedRect(0.08, 0.18, 0.16, 0.64, "rgba(97, 192, 255, 0.08)"),
+      normalizedRect(0.76, 0.18, 0.16, 0.64, "rgba(255, 110, 137, 0.08)"),
+      normalizedRect(0.46, 0.08, 0.08, 0.84, "rgba(255, 255, 255, 0.04)"),
+    ],
+  }),
+  crosswind: createMapDef({
+    id: "crosswind",
+    label: "크로스윈드",
+    tag: "십자 전장 · 다방향 진입",
+    description: "십자 축을 두고 여러 방향에서 동시에 밀어붙이는 맵입니다.",
+    shapeScale: 1.05,
+    shapeBias: { triangle: 1.12, hexagon: 1.1 },
+    spawnPreset: "quadrants",
+    territoryPattern: "cross",
+    teamLayout: "cross",
+    soccerLayout: "classic",
+    palette: {
+      skyTop: "#16344d",
+      skyBottom: "#061018",
+      glowA: "rgba(93, 196, 255, 0.16)",
+      glowB: "rgba(144, 255, 216, 0.08)",
+    },
+    zones: [
+      normalizedRect(0.42, 0.08, 0.16, 0.84, "rgba(255, 255, 255, 0.03)"),
+      normalizedRect(0.08, 0.42, 0.84, 0.16, "rgba(255, 255, 255, 0.03)"),
+    ],
+  }),
+  dunes: createMapDef({
+    id: "dunes",
+    label: "듄스",
+    tag: "열린 사막 · 속도전",
+    description: "가림이 적고 부드럽게 흐르는 사막형 전장입니다.",
+    gridSize: 104,
+    shapeScale: 1.12,
+    shapeBias: { square: 1.3, triangle: 1.18, hexagon: 0.92 },
+    botScale: 0.94,
+    spawnPreset: "sides",
+    territoryPattern: "checker",
+    teamLayout: "sideLanes",
+    soccerLayout: "wide",
+    palette: {
+      skyTop: "#4b3420",
+      skyBottom: "#120d11",
+      glowA: "rgba(255, 201, 120, 0.16)",
+      glowB: "rgba(255, 145, 91, 0.08)",
+      grid: "rgba(255, 229, 186, 0.045)",
+      border: "rgba(255, 209, 140, 0.2)",
+      minimapGlow: "rgba(255, 201, 120, 0.12)",
+    },
+    zones: [
+      normalizedCircle(0.28, 0.34, 0.1, "rgba(255, 218, 143, 0.05)"),
+      normalizedCircle(0.72, 0.66, 0.12, "rgba(255, 171, 120, 0.05)"),
+      normalizedCircle(0.52, 0.5, 0.08, "rgba(255, 255, 255, 0.02)"),
+    ],
+  }),
+  pulse: createMapDef({
+    id: "pulse",
+    label: "펄스",
+    tag: "네온 · 혼합 교전",
+    description: "원형 구역이 튀어나오는 네온 아레나형 전장입니다.",
+    gridSize: 78,
+    shapeScale: 1.08,
+    shapeBias: { pentagon: 1.25, hexagon: 1.16, square: 0.82 },
+    botScale: 1.08,
+    spawnPreset: "corners",
+    territoryPattern: "quadrants",
+    teamLayout: "pockets",
+    soccerLayout: "arena",
+    palette: {
+      skyTop: "#21133d",
+      skyBottom: "#070914",
+      glowA: "rgba(130, 110, 255, 0.18)",
+      glowB: "rgba(83, 232, 255, 0.12)",
+      border: "rgba(165, 203, 255, 0.22)",
+      minimapGlow: "rgba(130, 110, 255, 0.16)",
+    },
+    zones: [
+      normalizedCircle(0.3, 0.28, 0.08, "rgba(130, 110, 255, 0.08)"),
+      normalizedCircle(0.7, 0.28, 0.08, "rgba(83, 232, 255, 0.08)"),
+      normalizedCircle(0.3, 0.72, 0.08, "rgba(83, 232, 255, 0.08)"),
+      normalizedCircle(0.7, 0.72, 0.08, "rgba(130, 110, 255, 0.08)"),
+      normalizedRing(0.5, 0.5, 0.16, 0.1, "rgba(255, 255, 255, 0.03)"),
+    ],
+  }),
+  reactor: createMapDef({
+    id: "reactor",
+    label: "리액터",
+    tag: "중앙 코어 · 압축 전장",
+    description: "중앙 원자로를 감싸며 압박하는 코어형 전장입니다.",
+    shapeScale: 0.98,
+    shapeBias: { alphaPentagon: 1.35, pentagon: 1.18, square: 0.82 },
+    botScale: 1.12,
+    spawnPreset: "ring",
+    territoryPattern: "ring",
+    teamLayout: "ring",
+    soccerLayout: "boxes",
+    palette: {
+      skyTop: "#2a2018",
+      skyBottom: "#090b12",
+      glowA: "rgba(255, 144, 99, 0.18)",
+      glowB: "rgba(255, 215, 122, 0.09)",
+      border: "rgba(255, 180, 128, 0.22)",
+      minimapGlow: "rgba(255, 144, 99, 0.14)",
+    },
+    zones: [
+      normalizedRing(0.5, 0.5, 0.24, 0.14, "rgba(255, 144, 99, 0.08)"),
+      normalizedCircle(0.5, 0.5, 0.08, "rgba(255, 215, 122, 0.06)"),
+    ],
+  }),
+  atlas: createMapDef({
+    id: "atlas",
+    label: "아틀라스",
+    tag: "넓은 섹터 · 파밍형",
+    description: "네 구역을 길게 돌며 파밍하기 좋은 넓은 전장입니다.",
+    gridSize: 108,
+    shapeScale: 1.22,
+    shapeBias: { square: 1.22, pentagon: 1.08, alphaPentagon: 0.9 },
+    botScale: 0.88,
+    spawnPreset: "quadrants",
+    territoryPattern: "quadrants",
+    teamLayout: "cross",
+    soccerLayout: "wide",
+    palette: {
+      skyTop: "#183145",
+      skyBottom: "#071018",
+      glowA: "rgba(125, 197, 255, 0.16)",
+      glowB: "rgba(167, 255, 214, 0.08)",
+      minimapGlow: "rgba(125, 197, 255, 0.13)",
+    },
+    zones: [
+      normalizedRect(0.08, 0.08, 0.34, 0.34, "rgba(97, 192, 255, 0.04)"),
+      normalizedRect(0.58, 0.08, 0.34, 0.34, "rgba(255, 255, 255, 0.025)"),
+      normalizedRect(0.08, 0.58, 0.34, 0.34, "rgba(255, 255, 255, 0.025)"),
+      normalizedRect(0.58, 0.58, 0.34, 0.34, "rgba(255, 110, 137, 0.04)"),
+    ],
+  }),
+  basalt: createMapDef({
+    id: "basalt",
+    label: "바솔트",
+    tag: "무거운 전선 · 압박형",
+    description: "좌우 전선이 두꺼워 장기전이 자주 나오는 현무암 전장입니다.",
+    gridSize: 84,
+    shapeScale: 0.96,
+    shapeBias: { squishedSquare: 1.3, hexagon: 1.15, square: 0.9 },
+    botScale: 1.18,
+    spawnPreset: "sides",
+    territoryPattern: "sides",
+    teamLayout: "pockets",
+    soccerLayout: "narrow",
+    palette: {
+      skyTop: "#2c3139",
+      skyBottom: "#080b10",
+      glowA: "rgba(142, 170, 194, 0.14)",
+      glowB: "rgba(255, 141, 110, 0.06)",
+      border: "rgba(196, 216, 234, 0.18)",
+      minimapGlow: "rgba(142, 170, 194, 0.12)",
+    },
+    zones: [
+      normalizedRect(0.08, 0.14, 0.16, 0.72, "rgba(120, 148, 175, 0.07)"),
+      normalizedRect(0.76, 0.14, 0.16, 0.72, "rgba(255, 129, 120, 0.06)"),
+      normalizedRect(0.4, 0.3, 0.2, 0.4, "rgba(255, 255, 255, 0.025)"),
+    ],
+  }),
+  storm: createMapDef({
+    id: "storm",
+    label: "스톰",
+    tag: "불규칙 · 기습형",
+    description: "회오리처럼 휘어진 대각 흐름이 살아 있는 전장입니다.",
+    gridSize: 76,
+    shapeScale: 1.06,
+    shapeBias: { triangle: 1.2, hexagon: 1.16, alphaPentagon: 0.88 },
+    botScale: 1.1,
+    spawnPreset: "diagonal",
+    territoryPattern: "diagonal",
+    teamLayout: "diagonal",
+    soccerLayout: "vertical",
+    palette: {
+      skyTop: "#172e48",
+      skyBottom: "#060e17",
+      glowA: "rgba(94, 160, 255, 0.18)",
+      glowB: "rgba(255, 255, 255, 0.08)",
+      minimapGlow: "rgba(94, 160, 255, 0.15)",
+    },
+    zones: [
+      normalizedDiamond(0.3, 0.28, 0.16, 0.22, "rgba(97, 192, 255, 0.07)"),
+      normalizedDiamond(0.7, 0.72, 0.16, 0.22, "rgba(255, 110, 137, 0.07)"),
+      normalizedRing(0.5, 0.5, 0.18, 0.12, "rgba(255, 255, 255, 0.025)"),
+    ],
+  }),
+};
+
+const MAP_IDS = Object.keys(MAP_DEFS);
 
 const GAME_MODE_DEFS = {
   ffa: {
@@ -1026,6 +1545,7 @@ let entityId = 0;
 const state = {
   mode: "menu",
   selectedGameMode: "ffa",
+  selectedMapId: loadStoredMapId(),
   viewport: {
     width: window.innerWidth,
     height: window.innerHeight,
@@ -1047,6 +1567,17 @@ const state = {
     label: "자유전",
     description: "",
     objective: "",
+    mapId: "classic",
+    mapLabel: "클래식",
+    mapTag: "표준",
+    mapDescription: "",
+    mapPalette: createMapPalette(),
+    mapZones: [],
+    gridSize: GRID_SIZE,
+    spawnPreset: "sides",
+    territoryPattern: "sides",
+    teamLayout: "sideLanes",
+    soccerLayout: "classic",
     teamBased: false,
     scoreLimit: 0,
     timeLimit: 0,
@@ -1102,6 +1633,7 @@ const state = {
 };
 
 const upgradeElements = new Map();
+buildMapSelector();
 dom.nicknameInput.value = loadStoredNickname();
 
 buildUpgradeList();
@@ -1185,6 +1717,13 @@ dom.musicVolume.addEventListener("input", () => {
   setMusicVolume(Number(dom.musicVolume.value) / 100);
 });
 
+dom.mapSelector.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-game-map]");
+  if (button) {
+    setSelectedGameMap(button.dataset.gameMap);
+  }
+});
+
 for (const button of dom.modeButtons) {
   button.addEventListener("click", () => {
     setSelectedGameMode(button.dataset.gameMode);
@@ -1261,8 +1800,26 @@ function buildUpgradeList() {
   }
 }
 
+function buildMapSelector() {
+  dom.mapCount.textContent = `${MAP_IDS.length}개`;
+  dom.mapSelector.innerHTML = MAP_IDS.map((mapId) => {
+    const map = getMapDef(mapId);
+    return `
+      <button class="map-card" data-game-map="${map.id}" type="button">
+        <span class="map-card__tag">${map.tag}</span>
+        <strong class="map-card__title">${map.label}</strong>
+        <span class="map-card__meta">${map.description}</span>
+      </button>
+    `;
+  }).join("");
+}
+
 function getGameModeDef(modeId = state.selectedGameMode) {
   return GAME_MODE_DEFS[modeId] || GAME_MODE_DEFS.ffa;
+}
+
+function getMapDef(mapId = state.selectedMapId) {
+  return MAP_DEFS[mapId] || MAP_DEFS.classic;
 }
 
 function setSelectedGameMode(modeId) {
@@ -1274,37 +1831,77 @@ function setSelectedGameMode(modeId) {
   syncModeSelector();
 }
 
+function setSelectedGameMap(mapId) {
+  if (!MAP_DEFS[mapId]) {
+    return;
+  }
+
+  state.selectedMapId = mapId;
+  saveStoredMapId(mapId);
+  syncModeSelector();
+}
+
 function syncModeSelector() {
   const modeDef = getGameModeDef();
+  const mapDef = getMapDef();
   for (const button of dom.modeButtons) {
     button.classList.toggle("is-active", button.dataset.gameMode === modeDef.id);
   }
 
-  setOverlay(
-    `${modeDef.label} 시작`,
-    `${modeDef.description} ${modeDef.objective}`,
-    `${modeDef.label} 시작`,
-  );
+  for (const button of dom.mapSelector.querySelectorAll("[data-game-map]")) {
+    button.classList.toggle("is-active", button.dataset.gameMap === mapDef.id);
+  }
+
+  dom.overlayTitle.textContent = `${modeDef.label} · ${mapDef.label}`;
+  dom.overlayText.textContent = `${modeDef.description} ${modeDef.objective}`;
+  dom.mapSummary.textContent = `${mapDef.label}: ${mapDef.tag}. ${mapDef.description}`;
+  dom.startButton.textContent = `${modeDef.label} 시작`;
 }
 
-function createMatchState(modeId) {
+function createMatchState(modeId, mapId) {
   const modeDef = getGameModeDef(modeId);
+  const mapDef = getMapDef(mapId);
   return {
     id: modeDef.id,
     label: modeDef.label,
     description: modeDef.description,
     objective: modeDef.objective,
+    mapId: mapDef.id,
+    mapLabel: mapDef.label,
+    mapTag: mapDef.tag,
+    mapDescription: mapDef.description,
+    mapPalette: mapDef.palette,
+    mapZones: mapDef.zones,
+    gridSize: mapDef.gridSize || GRID_SIZE,
+    spawnPreset: mapDef.spawnPreset || "sides",
+    territoryPattern: mapDef.territoryPattern || "sides",
+    teamLayout: mapDef.teamLayout || "sideLanes",
+    soccerLayout: mapDef.soccerLayout || "classic",
     teamBased: Boolean(modeDef.teamBased),
     scoreLimit: modeDef.scoreLimit || 0,
     timeLimit: modeDef.timeLimit || 0,
     timeRemaining: modeDef.timeLimit || 0,
-    shapeTargets: { ...modeDef.shapeTargets },
-    botTargets: { ...modeDef.botTargets },
+    shapeTargets: buildScaledTargets(modeDef.shapeTargets, mapDef.shapeScale, mapDef.shapeBias),
+    botTargets: buildScaledTargets(modeDef.botTargets, mapDef.botScale),
     teamScores: { blue: 0, red: 0 },
-    territory: modeDef.id === "territory" ? createTerritoryState() : null,
-    ball: modeDef.hasBall ? createSoccerBall() : null,
+    territory: modeDef.id === "territory" ? createTerritoryState(mapDef) : null,
+    ball: modeDef.hasBall ? createSoccerBall(mapDef) : null,
     winner: "",
   };
+}
+
+function buildScaledTargets(baseTargets, scale = 1, bias = {}) {
+  const result = {};
+  for (const [key, value] of Object.entries(baseTargets)) {
+    if (value <= 0) {
+      result[key] = 0;
+      continue;
+    }
+
+    const nextValue = Math.round(value * scale * (bias[key] || 1));
+    result[key] = Math.max(1, nextValue);
+  }
+  return result;
 }
 
 function resizeCanvas() {
@@ -1333,7 +1930,7 @@ function frame(timestamp) {
 }
 
 function startGame() {
-  state.match = createMatchState(state.selectedGameMode);
+  state.match = createMatchState(state.selectedGameMode, state.selectedMapId);
   state.mode = "running";
   state.matchTime = 0;
   state.score = 0;
@@ -1348,7 +1945,7 @@ function startGame() {
 
   spawnInitialWorld();
 
-  pushFeed(`${state.match.label} 시작. ${state.match.objective}`);
+  pushFeed(`${state.match.label} · ${state.match.mapLabel} 시작. ${state.match.objective}`);
   pushFeed(
     state.match.teamBased
       ? "당신은 블루 팀입니다. 아군과 함께 움직이세요."
@@ -1511,10 +2108,11 @@ function createEnemyTank(team = "rogue") {
   return enemy;
 }
 
-function createSoccerBall() {
+function createSoccerBall(mapDef = getMapDef()) {
+  const config = getSoccerFieldConfig(mapDef.soccerLayout);
   return {
-    x: WORLD_SIZE / 2,
-    y: WORLD_SIZE / 2,
+    x: config.center.x,
+    y: config.center.y,
     vx: 0,
     vy: 0,
     radius: 34,
@@ -1525,40 +2123,11 @@ function createSoccerBall() {
 }
 
 function getSpawnPointForTeam(team) {
-  if (state.match.id === "soccer") {
-    if (team === "blue") {
-      return {
-        x: randomBetween(WORLD_SIZE * 0.18, WORLD_SIZE * 0.28),
-        y: randomBetween(WORLD_SIZE * 0.36, WORLD_SIZE * 0.64),
-      };
-    }
-
-    if (team === "red" || team === "rogue") {
-      return {
-        x: randomBetween(WORLD_SIZE * 0.72, WORLD_SIZE * 0.82),
-        y: randomBetween(WORLD_SIZE * 0.36, WORLD_SIZE * 0.64),
-      };
-    }
-  }
-
-  if (state.match.teamBased) {
-    if (team === "blue") {
-      return {
-        x: randomBetween(WORLD_SIZE * 0.16, WORLD_SIZE * 0.28),
-        y: randomBetween(WORLD_SIZE * 0.22, WORLD_SIZE * 0.78),
-      };
-    }
-
-    return {
-      x: randomBetween(WORLD_SIZE * 0.72, WORLD_SIZE * 0.84),
-      y: randomBetween(WORLD_SIZE * 0.22, WORLD_SIZE * 0.78),
-    };
-  }
-
-  return randomPointAwayFromPlayer(860);
+  const zones = getSpawnZonesForTeam(team);
+  return sampleSpawnPoint(zones, state.match.teamBased ? 0 : 860);
 }
 
-function createTerritoryState() {
+function createTerritoryState(mapDef = getMapDef()) {
   const cols = Math.ceil(WORLD_SIZE / TERRITORY_CELL_SIZE);
   const rows = Math.ceil(WORLD_SIZE / TERRITORY_CELL_SIZE);
   const cells = [];
@@ -1566,13 +2135,7 @@ function createTerritoryState() {
 
   for (let row = 0; row < rows; row += 1) {
     for (let col = 0; col < cols; col += 1) {
-      let owner = "";
-
-      if (col <= 1) {
-        owner = "blue";
-      } else if (col >= cols - 2) {
-        owner = "red";
-      }
+      const owner = getInitialTerritoryOwner(mapDef.territoryPattern, row, col, rows, cols);
 
       if (owner) {
         counts[owner] += 1;
@@ -1589,6 +2152,308 @@ function createTerritoryState() {
     cells,
     counts,
   };
+}
+
+function getSpawnZonesForTeam(team) {
+  if (state.match.id === "soccer") {
+    return getSoccerSpawnZones(team);
+  }
+
+  const preset = state.match.spawnPreset || "sides";
+  const isTeamMatch = state.match.teamBased;
+  const zones = [];
+
+  if (preset === "sides") {
+    if (!isTeamMatch) {
+      return [
+        normalizedRect(0.12, 0.12, 0.76, 0.76, ""),
+      ];
+    }
+
+    if (team === "blue") {
+      return [normalizedRect(0.12, 0.2, 0.16, 0.6, "")];
+    }
+
+    return [normalizedRect(0.72, 0.2, 0.16, 0.6, "")];
+  }
+
+  if (preset === "corners") {
+    if (!isTeamMatch) {
+      return [
+        normalizedRect(0.1, 0.1, 0.18, 0.18, ""),
+        normalizedRect(0.72, 0.1, 0.18, 0.18, ""),
+        normalizedRect(0.1, 0.72, 0.18, 0.18, ""),
+        normalizedRect(0.72, 0.72, 0.18, 0.18, ""),
+      ];
+    }
+
+    if (team === "blue") {
+      return [
+        normalizedRect(0.08, 0.08, 0.18, 0.18, ""),
+        normalizedRect(0.08, 0.74, 0.18, 0.18, ""),
+      ];
+    }
+
+    return [
+      normalizedRect(0.74, 0.08, 0.18, 0.18, ""),
+      normalizedRect(0.74, 0.74, 0.18, 0.18, ""),
+    ];
+  }
+
+  if (preset === "northSouth") {
+    if (!isTeamMatch) {
+      return [normalizedRect(0.14, 0.14, 0.72, 0.72, "")];
+    }
+
+    if (team === "blue") {
+      return [normalizedRect(0.22, 0.08, 0.56, 0.16, "")];
+    }
+
+    return [normalizedRect(0.22, 0.76, 0.56, 0.16, "")];
+  }
+
+  if (preset === "diagonal") {
+    if (!isTeamMatch) {
+      return [
+        normalizedRect(0.08, 0.08, 0.2, 0.2, ""),
+        normalizedRect(0.72, 0.72, 0.2, 0.2, ""),
+        normalizedRect(0.08, 0.72, 0.2, 0.2, ""),
+        normalizedRect(0.72, 0.08, 0.2, 0.2, ""),
+      ];
+    }
+
+    if (team === "blue") {
+      return [normalizedRect(0.08, 0.08, 0.2, 0.2, ""), normalizedRect(0.18, 0.18, 0.14, 0.14, "")];
+    }
+
+    return [normalizedRect(0.72, 0.72, 0.2, 0.2, ""), normalizedRect(0.68, 0.68, 0.14, 0.14, "")];
+  }
+
+  if (preset === "ring") {
+    if (!isTeamMatch) {
+      return [
+        normalizedRing(0.5, 0.5, 0.34, 0.18, ""),
+      ];
+    }
+
+    if (team === "blue") {
+      return [
+        normalizedRect(0.14, 0.18, 0.18, 0.22, ""),
+        normalizedRect(0.14, 0.6, 0.18, 0.22, ""),
+      ];
+    }
+
+    return [
+      normalizedRect(0.68, 0.18, 0.18, 0.22, ""),
+      normalizedRect(0.68, 0.6, 0.18, 0.22, ""),
+    ];
+  }
+
+  if (preset === "corridor") {
+    if (!isTeamMatch) {
+      return [
+        normalizedRect(0.12, 0.16, 0.76, 0.68, ""),
+      ];
+    }
+
+    if (team === "blue") {
+      return [normalizedRect(0.08, 0.34, 0.18, 0.32, "")];
+    }
+
+    return [normalizedRect(0.74, 0.34, 0.18, 0.32, "")];
+  }
+
+  if (preset === "quadrants") {
+    if (!isTeamMatch) {
+      return [
+        normalizedRect(0.08, 0.08, 0.36, 0.36, ""),
+        normalizedRect(0.56, 0.08, 0.36, 0.36, ""),
+        normalizedRect(0.08, 0.56, 0.36, 0.36, ""),
+        normalizedRect(0.56, 0.56, 0.36, 0.36, ""),
+      ];
+    }
+
+    if (team === "blue") {
+      return [
+        normalizedRect(0.08, 0.08, 0.22, 0.22, ""),
+        normalizedRect(0.08, 0.7, 0.22, 0.22, ""),
+      ];
+    }
+
+    return [
+      normalizedRect(0.7, 0.08, 0.22, 0.22, ""),
+      normalizedRect(0.7, 0.7, 0.22, 0.22, ""),
+    ];
+  }
+
+  if (preset === "pockets") {
+    if (!isTeamMatch) {
+      return [normalizedRect(0.12, 0.12, 0.76, 0.76, "")];
+    }
+
+    if (team === "blue") {
+      return [
+        normalizedRect(0.08, 0.16, 0.16, 0.18, ""),
+        normalizedRect(0.08, 0.41, 0.16, 0.18, ""),
+        normalizedRect(0.08, 0.66, 0.16, 0.18, ""),
+      ];
+    }
+
+    return [
+      normalizedRect(0.76, 0.16, 0.16, 0.18, ""),
+      normalizedRect(0.76, 0.41, 0.16, 0.18, ""),
+      normalizedRect(0.76, 0.66, 0.16, 0.18, ""),
+    ];
+  }
+
+  return zones.length ? zones : [normalizedRect(0.14, 0.14, 0.72, 0.72, "")];
+}
+
+function getSoccerSpawnZones(team) {
+  const config = getSoccerFieldConfig();
+  const { inset, orientation } = config;
+  const ratioInset = inset / WORLD_SIZE;
+
+  if (orientation === "vertical") {
+    if (team === "blue") {
+      return [normalizedRect(0.34, ratioInset + 0.04, 0.32, 0.18, "")];
+    }
+
+    return [normalizedRect(0.34, 1 - ratioInset - 0.22, 0.32, 0.18, "")];
+  }
+
+  if (team === "blue") {
+    return [normalizedRect(ratioInset + 0.04, 0.34, 0.18, 0.32, "")];
+  }
+
+  return [normalizedRect(1 - ratioInset - 0.22, 0.34, 0.18, 0.32, "")];
+}
+
+function sampleSpawnPoint(zones, minDistance = 0) {
+  const anchor = state.player || { x: WORLD_SIZE / 2, y: WORLD_SIZE / 2 };
+  const safeZones = zones?.length ? zones : [normalizedRect(0.14, 0.14, 0.72, 0.72, "")];
+
+  for (let attempt = 0; attempt < 48; attempt += 1) {
+    const zone = sample(safeZones);
+    const point = samplePointInZone(zone);
+    if (!minDistance || distanceBetween(point, anchor) >= minDistance) {
+      return point;
+    }
+  }
+
+  return samplePointInZone(sample(safeZones));
+}
+
+function samplePointInZone(zone) {
+  const scale = zone.normalized ? WORLD_SIZE : 1;
+  if (zone.shape === "circle" || zone.shape === "ring") {
+    const centerX = zone.x * scale;
+    const centerY = zone.y * scale;
+    const outer = (zone.outerRadius || zone.radius) * scale;
+    const inner = (zone.innerRadius || 0) * scale;
+    const angle = randomBetween(0, TAU);
+    const radius = Math.sqrt(randomBetween(inner * inner, outer * outer));
+    return {
+      x: centerX + Math.cos(angle) * radius,
+      y: centerY + Math.sin(angle) * radius,
+    };
+  }
+
+  const x = zone.x * scale;
+  const y = zone.y * scale;
+  const width = zone.width * scale;
+  const height = zone.height * scale;
+  return {
+    x: randomBetween(x, x + width),
+    y: randomBetween(y, y + height),
+  };
+}
+
+function getInitialTerritoryOwner(pattern, row, col, rows, cols) {
+  if (pattern === "sides") {
+    if (col <= 1) {
+      return "blue";
+    }
+    if (col >= cols - 2) {
+      return "red";
+    }
+    return "";
+  }
+
+  if (pattern === "northSouth") {
+    if (row <= 1) {
+      return "blue";
+    }
+    if (row >= rows - 2) {
+      return "red";
+    }
+    return "";
+  }
+
+  if (pattern === "diagonal") {
+    if (col <= 1 || row <= 1) {
+      return "blue";
+    }
+    if (col >= cols - 2 || row >= rows - 2) {
+      return "red";
+    }
+    return "";
+  }
+
+  if (pattern === "corners") {
+    if ((col <= 1 && row <= 1) || (col <= 1 && row >= rows - 2)) {
+      return "blue";
+    }
+    if ((col >= cols - 2 && row <= 1) || (col >= cols - 2 && row >= rows - 2)) {
+      return "red";
+    }
+    return "";
+  }
+
+  if (pattern === "ring") {
+    const edge = row <= 1 || row >= rows - 2 || col <= 1 || col >= cols - 2;
+    if (edge) {
+      return col < cols / 2 ? "blue" : "red";
+    }
+    const nearCenter = Math.abs(col - cols / 2) <= 1 && Math.abs(row - rows / 2) <= 1;
+    if (nearCenter) {
+      return row < rows / 2 ? "blue" : "red";
+    }
+    return "";
+  }
+
+  if (pattern === "cross") {
+    if (Math.abs(col - cols * 0.2) <= 1 || Math.abs(col - cols * 0.3) <= 1) {
+      return "blue";
+    }
+    if (Math.abs(col - cols * 0.7) <= 1 || Math.abs(col - cols * 0.8) <= 1) {
+      return "red";
+    }
+    return row === Math.floor(rows / 2) ? (col < cols / 2 ? "blue" : "red") : "";
+  }
+
+  if (pattern === "checker") {
+    if ((row + col) % 6 === 0 && col < cols / 2) {
+      return "blue";
+    }
+    if ((row + col + 3) % 6 === 0 && col >= cols / 2) {
+      return "red";
+    }
+    return "";
+  }
+
+  if (pattern === "quadrants") {
+    const nearBlue = col <= 2 && (row <= 2 || row >= rows - 3);
+    const nearRed = col >= cols - 3 && (row <= 2 || row >= rows - 3);
+    if (nearBlue) {
+      return "blue";
+    }
+    if (nearRed) {
+      return "red";
+    }
+  }
+
+  return "";
 }
 
 function update(delta) {
@@ -2089,39 +2954,70 @@ function updateSoccerBall(delta) {
     return;
   }
 
+  const config = getSoccerFieldConfig();
   ball.hitFlash = Math.max(0, ball.hitFlash - delta * 4);
   ball.x += ball.vx * delta;
   ball.y += ball.vy * delta;
   ball.vx *= Math.exp(-delta * 1.55);
   ball.vy *= Math.exp(-delta * 1.55);
 
-  const goalHalfHeight = 360;
-  const goalTop = WORLD_SIZE / 2 - goalHalfHeight;
-  const goalBottom = WORLD_SIZE / 2 + goalHalfHeight;
+  if (config.orientation === "vertical") {
+    const goalLeft = config.center.x - config.goalHalfSize;
+    const goalRight = config.center.x + config.goalHalfSize;
 
-  if (ball.y - ball.radius <= WORLD_PADDING || ball.y + ball.radius >= WORLD_SIZE - WORLD_PADDING) {
-    ball.vy *= -0.92;
-    ball.y = clamp(ball.y, WORLD_PADDING + ball.radius, WORLD_SIZE - WORLD_PADDING - ball.radius);
+    if (ball.x - ball.radius <= config.inset || ball.x + ball.radius >= WORLD_SIZE - config.inset) {
+      ball.vx *= -0.92;
+      ball.x = clamp(ball.x, config.inset + ball.radius, WORLD_SIZE - config.inset - ball.radius);
+    }
+
+    if (ball.y - ball.radius <= config.inset) {
+      if (ball.x >= goalLeft && ball.x <= goalRight) {
+        onSoccerGoal("red");
+        return;
+      }
+
+      ball.vy = Math.abs(ball.vy) * 0.92;
+      ball.y = config.inset + ball.radius;
+    }
+
+    if (ball.y + ball.radius >= WORLD_SIZE - config.inset) {
+      if (ball.x >= goalLeft && ball.x <= goalRight) {
+        onSoccerGoal("blue");
+        return;
+      }
+
+      ball.vy = -Math.abs(ball.vy) * 0.92;
+      ball.y = WORLD_SIZE - config.inset - ball.radius;
+    }
+    return;
   }
 
-  if (ball.x - ball.radius <= WORLD_PADDING) {
+  const goalTop = config.center.y - config.goalHalfSize;
+  const goalBottom = config.center.y + config.goalHalfSize;
+
+  if (ball.y - ball.radius <= config.inset || ball.y + ball.radius >= WORLD_SIZE - config.inset) {
+    ball.vy *= -0.92;
+    ball.y = clamp(ball.y, config.inset + ball.radius, WORLD_SIZE - config.inset - ball.radius);
+  }
+
+  if (ball.x - ball.radius <= config.inset) {
     if (ball.y >= goalTop && ball.y <= goalBottom) {
       onSoccerGoal("red");
       return;
     }
 
     ball.vx = Math.abs(ball.vx) * 0.92;
-    ball.x = WORLD_PADDING + ball.radius;
+    ball.x = config.inset + ball.radius;
   }
 
-  if (ball.x + ball.radius >= WORLD_SIZE - WORLD_PADDING) {
+  if (ball.x + ball.radius >= WORLD_SIZE - config.inset) {
     if (ball.y >= goalTop && ball.y <= goalBottom) {
       onSoccerGoal("blue");
       return;
     }
 
     ball.vx = -Math.abs(ball.vx) * 0.92;
-    ball.x = WORLD_SIZE - WORLD_PADDING - ball.radius;
+    ball.x = WORLD_SIZE - config.inset - ball.radius;
   }
 }
 
@@ -2145,8 +3041,9 @@ function resetSoccerPositions() {
   }
 
   if (state.match.ball) {
-    state.match.ball.x = WORLD_SIZE / 2;
-    state.match.ball.y = WORLD_SIZE / 2;
+    const config = getSoccerFieldConfig();
+    state.match.ball.x = config.center.x;
+    state.match.ball.y = config.center.y;
     state.match.ball.vx = 0;
     state.match.ball.vy = 0;
     state.match.ball.hitFlash = 0;
@@ -2342,12 +3239,54 @@ function getEnemyObjective(enemy) {
   }
 
   if (state.match.id === "team") {
-    return enemy.team === "blue"
-      ? { x: WORLD_SIZE * 0.64, y: WORLD_SIZE / 2 }
-      : { x: WORLD_SIZE * 0.36, y: WORLD_SIZE / 2 };
+    return getTeamObjectivePoint(enemy.team);
   }
 
   return null;
+}
+
+function getTeamObjectivePoint(team) {
+  const layout = state.match.teamLayout || "sideLanes";
+
+  if (layout === "topBottom") {
+    return team === "blue"
+      ? { x: WORLD_SIZE / 2, y: WORLD_SIZE * 0.64 }
+      : { x: WORLD_SIZE / 2, y: WORLD_SIZE * 0.36 };
+  }
+
+  if (layout === "diagonal") {
+    return team === "blue"
+      ? { x: WORLD_SIZE * 0.66, y: WORLD_SIZE * 0.66 }
+      : { x: WORLD_SIZE * 0.34, y: WORLD_SIZE * 0.34 };
+  }
+
+  if (layout === "ring") {
+    return team === "blue"
+      ? { x: WORLD_SIZE * 0.58, y: WORLD_SIZE / 2 }
+      : { x: WORLD_SIZE * 0.42, y: WORLD_SIZE / 2 };
+  }
+
+  if (layout === "corridor") {
+    return team === "blue"
+      ? { x: WORLD_SIZE * 0.58, y: WORLD_SIZE / 2 }
+      : { x: WORLD_SIZE * 0.42, y: WORLD_SIZE / 2 };
+  }
+
+  if (layout === "cross") {
+    return team === "blue"
+      ? { x: WORLD_SIZE * 0.58, y: WORLD_SIZE * 0.42 }
+      : { x: WORLD_SIZE * 0.42, y: WORLD_SIZE * 0.58 };
+  }
+
+  if (layout === "pockets") {
+    return team === "blue"
+      ? { x: WORLD_SIZE * 0.6, y: WORLD_SIZE / 2 }
+      : { x: WORLD_SIZE * 0.4, y: WORLD_SIZE / 2 };
+  }
+
+  return team === "blue"
+    ? { x: WORLD_SIZE * 0.64, y: WORLD_SIZE / 2 }
+    : { x: WORLD_SIZE * 0.36, y: WORLD_SIZE / 2 };
 }
 
 function isHostilePair(a, b) {
@@ -2390,8 +3329,9 @@ function getTankLabel(tank) {
 }
 
 function clampBallToWorld(ball) {
-  ball.x = clamp(ball.x, WORLD_PADDING + ball.radius, WORLD_SIZE - WORLD_PADDING - ball.radius);
-  ball.y = clamp(ball.y, WORLD_PADDING + ball.radius, WORLD_SIZE - WORLD_PADDING - ball.radius);
+  const config = getSoccerFieldConfig();
+  ball.x = clamp(ball.x, config.inset + ball.radius, WORLD_SIZE - config.inset - ball.radius);
+  ball.y = clamp(ball.y, config.inset + ball.radius, WORLD_SIZE - config.inset - ball.radius);
 }
 
 function gainXp(amount) {
@@ -2600,8 +3540,8 @@ function syncHud() {
   dom.xpText.textContent = `${Math.floor(player.xp)} / ${player.xpToNext}`;
   dom.pointsLabel.textContent = getPlayerPointsLabel(player);
   dom.statsMeta.textContent = state.match.teamBased
-    ? `${state.match.label} | ${getMatchScoreSummary()} | 개인 점수 ${Math.floor(state.score)}`
-    : `레벨 ${player.level} | ${CLASS_DEFS[player.classId].label} | 점수 ${Math.floor(state.score)} | 도형 ${state.shapes.length}개 | 로그 ${state.enemies.length}기`;
+    ? `${state.match.label} | ${state.match.mapLabel} | ${getMatchScoreSummary()} | 개인 점수 ${Math.floor(state.score)}`
+    : `레벨 ${player.level} | ${state.match.mapLabel} | ${CLASS_DEFS[player.classId].label} | 점수 ${Math.floor(state.score)} | 도형 ${state.shapes.length}개 | 로그 ${state.enemies.length}기`;
 
   syncUpgradeButtons(player);
   syncClassPanel(player);
@@ -2657,16 +3597,23 @@ function render() {
 function drawArena() {
   const width = state.viewport.width;
   const height = state.viewport.height;
+  const palette = state.match.mapPalette || createMapPalette();
   const gradient = ctx.createLinearGradient(0, 0, 0, height);
-  gradient.addColorStop(0, "#153149");
-  gradient.addColorStop(1, "#08131f");
+  gradient.addColorStop(0, palette.skyTop);
+  gradient.addColorStop(1, palette.skyBottom);
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, width, height);
 
   const glow = ctx.createRadialGradient(width * 0.72, height * 0.24, 0, width * 0.72, height * 0.24, width * 0.4);
-  glow.addColorStop(0, "rgba(76, 180, 255, 0.2)");
+  glow.addColorStop(0, palette.glowA);
   glow.addColorStop(1, "rgba(76, 180, 255, 0)");
   ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, width, height);
+
+  const lowGlow = ctx.createRadialGradient(width * 0.2, height * 0.78, 0, width * 0.2, height * 0.78, width * 0.35);
+  lowGlow.addColorStop(0, palette.glowB);
+  lowGlow.addColorStop(1, "rgba(255, 110, 137, 0)");
+  ctx.fillStyle = lowGlow;
   ctx.fillRect(0, 0, width, height);
 }
 
@@ -2680,7 +3627,7 @@ function drawWorld() {
   drawGrid();
   drawMatchWorldDecorations();
 
-  ctx.strokeStyle = "rgba(189, 227, 255, 0.2)";
+  ctx.strokeStyle = state.match.mapPalette?.border || "rgba(189, 227, 255, 0.2)";
   ctx.lineWidth = 12;
   ctx.strokeRect(0, 0, WORLD_SIZE, WORLD_SIZE);
 
@@ -2732,17 +3679,18 @@ function drawGrid() {
   const right = state.camera.x + state.viewport.width / 2;
   const top = state.camera.y - state.viewport.height / 2;
   const bottom = state.camera.y + state.viewport.height / 2;
+  const gridSize = state.match.gridSize || GRID_SIZE;
 
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.05)";
+  ctx.strokeStyle = state.match.mapPalette?.grid || "rgba(255, 255, 255, 0.05)";
   ctx.lineWidth = 1;
   ctx.beginPath();
 
-  for (let x = Math.floor(left / GRID_SIZE) * GRID_SIZE; x <= right; x += GRID_SIZE) {
+  for (let x = Math.floor(left / gridSize) * gridSize; x <= right; x += gridSize) {
     ctx.moveTo(x, top);
     ctx.lineTo(x, bottom);
   }
 
-  for (let y = Math.floor(top / GRID_SIZE) * GRID_SIZE; y <= bottom; y += GRID_SIZE) {
+  for (let y = Math.floor(top / gridSize) * gridSize; y <= bottom; y += gridSize) {
     ctx.moveTo(left, y);
     ctx.lineTo(right, y);
   }
@@ -2751,6 +3699,8 @@ function drawGrid() {
 }
 
 function drawMatchWorldDecorations() {
+  drawMapZones(0, 0, 1);
+
   if (state.match.id === "territory") {
     drawTerritoryCells();
     return;
@@ -2763,6 +3713,69 @@ function drawMatchWorldDecorations() {
 
   if (state.match.id === "soccer") {
     drawSoccerField();
+  }
+}
+
+function drawMapZones(originX, originY, scale) {
+  for (const zone of state.match.mapZones || []) {
+    ctx.save();
+    traceMapZone(zone, originX, originY, scale);
+    if (zone.fill) {
+      ctx.fillStyle = zone.fill;
+      if (zone.shape === "ring") {
+        ctx.fill("evenodd");
+      } else {
+        ctx.fill();
+      }
+    }
+    if (zone.stroke) {
+      ctx.strokeStyle = zone.stroke;
+      ctx.lineWidth = Math.max(1, (zone.lineWidth || 4) * scale);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+}
+
+function traceMapZone(zone, originX, originY, scale) {
+  const factor = zone.normalized ? WORLD_SIZE * scale : scale;
+  const x = originX + zone.x * factor;
+  const y = originY + zone.y * factor;
+
+  ctx.beginPath();
+
+  if (zone.shape === "rect") {
+    const width = zone.width * factor;
+    const height = zone.height * factor;
+    const radius = Math.min(zone.radius * factor || 0, width / 2, height / 2);
+    if (radius > 0) {
+      roundRect(ctx, x, y, width, height, radius);
+    } else {
+      ctx.rect(x, y, width, height);
+    }
+    return;
+  }
+
+  if (zone.shape === "circle") {
+    ctx.arc(x, y, zone.radius * factor, 0, TAU);
+    return;
+  }
+
+  if (zone.shape === "ring") {
+    ctx.arc(x, y, zone.outerRadius * factor, 0, TAU);
+    ctx.moveTo(x + zone.innerRadius * factor, y);
+    ctx.arc(x, y, zone.innerRadius * factor, 0, TAU, true);
+    return;
+  }
+
+  if (zone.shape === "diamond") {
+    const width = zone.width * factor;
+    const height = zone.height * factor;
+    ctx.moveTo(x, y - height / 2);
+    ctx.lineTo(x + width / 2, y);
+    ctx.lineTo(x, y + height / 2);
+    ctx.lineTo(x - width / 2, y);
+    ctx.closePath();
   }
 }
 
@@ -2800,6 +3813,88 @@ function drawTerritoryCells() {
 
 function drawTeamLanes() {
   ctx.save();
+  const layout = state.match.teamLayout || "sideLanes";
+
+  if (layout === "topBottom") {
+    ctx.fillStyle = TEAM_DEFS.blue.tint;
+    ctx.fillRect(WORLD_SIZE * 0.12, 0, WORLD_SIZE * 0.76, WORLD_SIZE * 0.18);
+    ctx.fillStyle = TEAM_DEFS.red.tint;
+    ctx.fillRect(WORLD_SIZE * 0.12, WORLD_SIZE * 0.82, WORLD_SIZE * 0.76, WORLD_SIZE * 0.18);
+    ctx.restore();
+    return;
+  }
+
+  if (layout === "diagonal") {
+    ctx.fillStyle = TEAM_DEFS.blue.tint;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(WORLD_SIZE * 0.34, 0);
+    ctx.lineTo(0, WORLD_SIZE * 0.34);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = TEAM_DEFS.red.tint;
+    ctx.beginPath();
+    ctx.moveTo(WORLD_SIZE, WORLD_SIZE);
+    ctx.lineTo(WORLD_SIZE * 0.66, WORLD_SIZE);
+    ctx.lineTo(WORLD_SIZE, WORLD_SIZE * 0.66);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+    return;
+  }
+
+  if (layout === "ring") {
+    ctx.beginPath();
+    ctx.moveTo(WORLD_SIZE / 2, WORLD_SIZE / 2);
+    ctx.arc(WORLD_SIZE / 2, WORLD_SIZE / 2, WORLD_SIZE * 0.34, Math.PI * 0.6, Math.PI * 1.4);
+    ctx.closePath();
+    ctx.fillStyle = TEAM_DEFS.blue.tint;
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(WORLD_SIZE / 2, WORLD_SIZE / 2);
+    ctx.arc(WORLD_SIZE / 2, WORLD_SIZE / 2, WORLD_SIZE * 0.34, -Math.PI * 0.4, Math.PI * 0.4);
+    ctx.closePath();
+    ctx.fillStyle = TEAM_DEFS.red.tint;
+    ctx.fill();
+    ctx.restore();
+    return;
+  }
+
+  if (layout === "corridor") {
+    ctx.fillStyle = TEAM_DEFS.blue.tint;
+    ctx.fillRect(0, WORLD_SIZE * 0.28, WORLD_SIZE * 0.24, WORLD_SIZE * 0.44);
+    ctx.fillStyle = TEAM_DEFS.red.tint;
+    ctx.fillRect(WORLD_SIZE * 0.76, WORLD_SIZE * 0.28, WORLD_SIZE * 0.24, WORLD_SIZE * 0.44);
+    ctx.fillStyle = "rgba(255, 255, 255, 0.028)";
+    ctx.fillRect(WORLD_SIZE * 0.44, 0, WORLD_SIZE * 0.12, WORLD_SIZE);
+    ctx.restore();
+    return;
+  }
+
+  if (layout === "cross") {
+    ctx.fillStyle = TEAM_DEFS.blue.tint;
+    ctx.fillRect(0, WORLD_SIZE * 0.42, WORLD_SIZE * 0.48, WORLD_SIZE * 0.16);
+    ctx.fillRect(WORLD_SIZE * 0.18, 0, WORLD_SIZE * 0.16, WORLD_SIZE * 0.42);
+    ctx.fillStyle = TEAM_DEFS.red.tint;
+    ctx.fillRect(WORLD_SIZE * 0.52, WORLD_SIZE * 0.42, WORLD_SIZE * 0.48, WORLD_SIZE * 0.16);
+    ctx.fillRect(WORLD_SIZE * 0.66, WORLD_SIZE * 0.58, WORLD_SIZE * 0.16, WORLD_SIZE * 0.42);
+    ctx.restore();
+    return;
+  }
+
+  if (layout === "pockets") {
+    ctx.fillStyle = TEAM_DEFS.blue.tint;
+    ctx.fillRect(0, WORLD_SIZE * 0.14, WORLD_SIZE * 0.18, WORLD_SIZE * 0.18);
+    ctx.fillRect(0, WORLD_SIZE * 0.41, WORLD_SIZE * 0.18, WORLD_SIZE * 0.18);
+    ctx.fillRect(0, WORLD_SIZE * 0.68, WORLD_SIZE * 0.18, WORLD_SIZE * 0.18);
+    ctx.fillStyle = TEAM_DEFS.red.tint;
+    ctx.fillRect(WORLD_SIZE * 0.82, WORLD_SIZE * 0.14, WORLD_SIZE * 0.18, WORLD_SIZE * 0.18);
+    ctx.fillRect(WORLD_SIZE * 0.82, WORLD_SIZE * 0.41, WORLD_SIZE * 0.18, WORLD_SIZE * 0.18);
+    ctx.fillRect(WORLD_SIZE * 0.82, WORLD_SIZE * 0.68, WORLD_SIZE * 0.18, WORLD_SIZE * 0.18);
+    ctx.restore();
+    return;
+  }
+
   ctx.fillStyle = TEAM_DEFS.blue.tint;
   ctx.fillRect(0, WORLD_SIZE * 0.12, WORLD_SIZE * 0.18, WORLD_SIZE * 0.76);
   ctx.fillStyle = TEAM_DEFS.red.tint;
@@ -2808,32 +3903,110 @@ function drawTeamLanes() {
 }
 
 function drawSoccerField() {
-  const goalHalfHeight = 360;
-  const goalTop = WORLD_SIZE / 2 - goalHalfHeight;
-  const goalHeight = goalHalfHeight * 2;
+  const config = getSoccerFieldConfig();
+  const {
+    center,
+    orientation,
+    inset,
+    goalHalfSize,
+    goalDepth,
+    centerRadius,
+    penaltyDepth,
+    penaltyHalfSize,
+  } = config;
 
   ctx.save();
   ctx.fillStyle = "rgba(36, 110, 61, 0.12)";
-  ctx.fillRect(WORLD_PADDING, WORLD_PADDING, WORLD_SIZE - WORLD_PADDING * 2, WORLD_SIZE - WORLD_PADDING * 2);
+  ctx.fillRect(inset, inset, WORLD_SIZE - inset * 2, WORLD_SIZE - inset * 2);
 
   ctx.strokeStyle = "rgba(237, 248, 255, 0.16)";
   ctx.lineWidth = 8;
-  ctx.strokeRect(WORLD_PADDING, WORLD_PADDING, WORLD_SIZE - WORLD_PADDING * 2, WORLD_SIZE - WORLD_PADDING * 2);
+  ctx.strokeRect(inset, inset, WORLD_SIZE - inset * 2, WORLD_SIZE - inset * 2);
+
+  if (orientation === "vertical") {
+    ctx.beginPath();
+    ctx.moveTo(inset, center.y);
+    ctx.lineTo(WORLD_SIZE - inset, center.y);
+    ctx.stroke();
+  } else {
+    ctx.beginPath();
+    ctx.moveTo(center.x, inset);
+    ctx.lineTo(center.x, WORLD_SIZE - inset);
+    ctx.stroke();
+  }
 
   ctx.beginPath();
-  ctx.moveTo(WORLD_SIZE / 2, WORLD_PADDING);
-  ctx.lineTo(WORLD_SIZE / 2, WORLD_SIZE - WORLD_PADDING);
+  ctx.arc(center.x, center.y, centerRadius, 0, TAU);
   ctx.stroke();
 
-  ctx.beginPath();
-  ctx.arc(WORLD_SIZE / 2, WORLD_SIZE / 2, 240, 0, TAU);
-  ctx.stroke();
-
-  ctx.fillStyle = TEAM_DEFS.blue.tint;
-  ctx.fillRect(WORLD_PADDING - 40, goalTop, 120, goalHeight);
-  ctx.fillStyle = TEAM_DEFS.red.tint;
-  ctx.fillRect(WORLD_SIZE - WORLD_PADDING - 80, goalTop, 120, goalHeight);
+  if (orientation === "vertical") {
+    ctx.strokeRect(center.x - penaltyHalfSize, inset, penaltyHalfSize * 2, penaltyDepth);
+    ctx.strokeRect(center.x - penaltyHalfSize, WORLD_SIZE - inset - penaltyDepth, penaltyHalfSize * 2, penaltyDepth);
+    ctx.fillStyle = TEAM_DEFS.blue.tint;
+    ctx.fillRect(center.x - goalHalfSize, inset - goalDepth * 0.5, goalHalfSize * 2, goalDepth);
+    ctx.fillStyle = TEAM_DEFS.red.tint;
+    ctx.fillRect(center.x - goalHalfSize, WORLD_SIZE - inset - goalDepth * 0.5, goalHalfSize * 2, goalDepth);
+  } else {
+    ctx.strokeRect(inset, center.y - penaltyHalfSize, penaltyDepth, penaltyHalfSize * 2);
+    ctx.strokeRect(WORLD_SIZE - inset - penaltyDepth, center.y - penaltyHalfSize, penaltyDepth, penaltyHalfSize * 2);
+    ctx.fillStyle = TEAM_DEFS.blue.tint;
+    ctx.fillRect(inset - goalDepth * 0.5, center.y - goalHalfSize, goalDepth, goalHalfSize * 2);
+    ctx.fillStyle = TEAM_DEFS.red.tint;
+    ctx.fillRect(WORLD_SIZE - inset - goalDepth * 0.5, center.y - goalHalfSize, goalDepth, goalHalfSize * 2);
+  }
   ctx.restore();
+}
+
+function getSoccerFieldConfig(layoutId = state.match.soccerLayout) {
+  const config = {
+    center: { x: WORLD_SIZE / 2, y: WORLD_SIZE / 2 },
+    orientation: "horizontal",
+    inset: WORLD_PADDING,
+    goalHalfSize: 360,
+    goalDepth: 120,
+    centerRadius: 240,
+    penaltyDepth: 280,
+    penaltyHalfSize: 560,
+  };
+
+  if (layoutId === "wide") {
+    config.inset = 170;
+    config.goalHalfSize = 450;
+    config.centerRadius = 280;
+    config.penaltyDepth = 330;
+    config.penaltyHalfSize = 690;
+  } else if (layoutId === "narrow") {
+    config.inset = 310;
+    config.goalHalfSize = 280;
+    config.goalDepth = 100;
+    config.centerRadius = 180;
+    config.penaltyDepth = 220;
+    config.penaltyHalfSize = 480;
+  } else if (layoutId === "boxes") {
+    config.inset = 220;
+    config.goalHalfSize = 340;
+    config.goalDepth = 130;
+    config.centerRadius = 220;
+    config.penaltyDepth = 360;
+    config.penaltyHalfSize = 640;
+  } else if (layoutId === "arena") {
+    config.inset = 210;
+    config.goalHalfSize = 390;
+    config.goalDepth = 130;
+    config.centerRadius = 270;
+    config.penaltyDepth = 300;
+    config.penaltyHalfSize = 620;
+  } else if (layoutId === "vertical") {
+    config.orientation = "vertical";
+    config.inset = 210;
+    config.goalHalfSize = 360;
+    config.goalDepth = 120;
+    config.centerRadius = 230;
+    config.penaltyDepth = 300;
+    config.penaltyHalfSize = 580;
+  }
+
+  return config;
 }
 
 function drawSoccerBall(ball) {
@@ -3040,10 +4213,12 @@ function drawMiniMap() {
   ctx.clip();
 
   const glow = ctx.createRadialGradient(centerX, centerY, radius * 0.15, centerX, centerY, radius);
-  glow.addColorStop(0, "rgba(76, 180, 255, 0.12)");
+  glow.addColorStop(0, state.match.mapPalette?.minimapGlow || "rgba(76, 180, 255, 0.12)");
   glow.addColorStop(1, "rgba(76, 180, 255, 0)");
   ctx.fillStyle = glow;
   ctx.fillRect(mapLeft, mapTop, diameter, diameter);
+
+  drawMapZones(mapLeft, mapTop, scale);
 
   ctx.strokeStyle = "rgba(255, 255, 255, 0.04)";
   ctx.lineWidth = 1;
@@ -3508,8 +4683,8 @@ function syncLeaderboard(player) {
   const renderEntries = playerInTop ? topEntries : [...topEntries.slice(0, LEADERBOARD_LIMIT - 1), entries[playerRank - 1]];
 
   dom.leaderboardStatus.textContent = state.match.teamBased
-    ? getMatchStatusLabel()
-    : `내 순위 #${playerRank}`;
+    ? `${state.match.mapLabel} · ${getMatchStatusLabel()}`
+    : `${state.match.mapLabel} · 내 순위 #${playerRank}`;
 
   const markup = renderEntries
     .map((entry) => {
@@ -3964,8 +5139,8 @@ function syncCompactHud(player) {
   const nextUnlock = getNextClassUnlock(player);
 
   dom.compactLevel.textContent = state.match.teamBased
-    ? `${state.match.label} · 레벨 ${player.level}`
-    : `레벨 ${player.level}`;
+    ? `${state.match.label} · ${state.match.mapLabel}`
+    : `${state.match.mapLabel} · 레벨 ${player.level}`;
   dom.compactPoints.textContent = state.match.teamBased
     ? getMatchStatusLabel()
     : getPlayerPointsLabel(player);
@@ -4176,6 +5351,15 @@ function loadStoredNickname() {
   }
 }
 
+function loadStoredMapId() {
+  try {
+    const stored = localStorage.getItem(MAP_STORAGE_KEY) || "classic";
+    return MAP_DEFS[stored] ? stored : "classic";
+  } catch {
+    return "classic";
+  }
+}
+
 function loadStoredMusicVolume() {
   try {
     const raw = Number.parseFloat(localStorage.getItem(MUSIC_VOLUME_STORAGE_KEY) || "0.55");
@@ -4196,6 +5380,14 @@ function saveStoredMusicVolume(value) {
 function saveStoredNickname(value) {
   try {
     localStorage.setItem(NICKNAME_STORAGE_KEY, value || "전차");
+  } catch {
+    return;
+  }
+}
+
+function saveStoredMapId(value) {
+  try {
+    localStorage.setItem(MAP_STORAGE_KEY, MAP_DEFS[value] ? value : "classic");
   } catch {
     return;
   }

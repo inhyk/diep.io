@@ -917,7 +917,9 @@ select {
 }
 
 .overlay__card {
-  width: min(92vw, 420px);
+  width: min(94vw, 720px);
+  max-height: min(88vh, 860px);
+  overflow: auto;
   padding: 28px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 28px;
@@ -944,6 +946,28 @@ select {
   margin-top: 18px;
 }
 
+.map-selector {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.map-selector__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.map-selector__count,
+.map-selector__summary {
+  color: var(--muted);
+}
+
+.map-selector__count {
+  font-size: 0.8rem;
+}
+
 .mode-selector__label {
   color: var(--muted);
   font-size: 0.82rem;
@@ -955,6 +979,15 @@ select {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.map-selector__list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  max-height: 320px;
+  overflow: auto;
+  padding-right: 4px;
 }
 
 .mode-chip {
@@ -979,6 +1012,60 @@ select {
 .mode-chip.is-active {
   border-color: rgba(104, 211, 255, 0.45);
   background: linear-gradient(90deg, rgba(42, 143, 255, 0.22), rgba(104, 211, 255, 0.16));
+}
+
+.map-card {
+  display: grid;
+  gap: 6px;
+  min-height: 86px;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    transform 140ms ease,
+    border-color 140ms ease,
+    background 140ms ease;
+}
+
+.map-card:hover {
+  transform: translateY(-1px);
+  border-color: rgba(76, 180, 255, 0.34);
+  background: rgba(76, 180, 255, 0.12);
+}
+
+.map-card.is-active {
+  border-color: rgba(104, 211, 255, 0.45);
+  background:
+    linear-gradient(180deg, rgba(42, 143, 255, 0.18), rgba(104, 211, 255, 0.08)),
+    rgba(255, 255, 255, 0.05);
+}
+
+.map-card__title {
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.map-card__meta {
+  color: var(--muted);
+  font-size: 0.74rem;
+  line-height: 1.35;
+}
+
+.map-card__tag {
+  color: rgba(210, 244, 255, 0.9);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.map-selector__summary {
+  margin: 0;
+  font-size: 0.84rem;
+  line-height: 1.48;
 }
 
 .overlay__field span {
@@ -1137,6 +1224,17 @@ select {
   .overlay__card {
     padding: 22px;
     border-radius: 22px;
+  }
+
+  .map-selector__list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    max-height: 260px;
+  }
+}
+
+@media (max-width: 520px) {
+  .map-selector__list {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
